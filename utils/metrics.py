@@ -47,3 +47,33 @@ def format_results(metrics, prefix=""):
     output += f"Recall:    {metrics['recall']:.4f}\n"
     output += f"\nDetailed Report:\n{metrics['report']}\n"
     return output
+
+
+def compute_bert_metrics(eval_pred, id2label):
+    """
+    Compute metrics for BERT model.
+    
+    Args:
+        eval_pred: Tuple of (predictions, labels)
+        id2label: Mapping from index to label
+        
+    Returns:
+        dict: Metrics dictionary
+    """
+    predictions, labels = eval_pred
+    predictions = np.argmax(predictions, axis=2)
+
+    # Remove ignored index (special tokens)
+    true_predictions = [
+        [id2label[p] for (p, l) in zip(prediction, label) if l != -100]
+        for prediction, label in zip(predictions, labels)
+    ]
+    true_labels = [
+        [id2label[l] for (p, l) in zip(prediction, label) if l != -100]
+        for prediction, label in zip(predictions, labels)
+    ]
+
+    results = evaluate_model(true_labels, true_predictions)
+    # Remove report for trainer metrics to avoid clutter, or keep it if needed
+    # For HF Trainer, we usually want scalar values
+    return {k: v for k, v in results.items() if k != 'report'}

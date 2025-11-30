@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# Virtual Environments
+venv/
+env/
+.env
+.venv/
+
+# IDEs
+.vscode/
+.idea/
+
+# Project Outputs
+outputs/
+logs/
+bert_checkpoints/
+bert_ner_output/
+
+# Models and Plots (if generated in root)
+*.joblib
+*.pt
+*.png

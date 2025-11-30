@@ -154,24 +154,16 @@ class NERDataset(torch.utils.data.Dataset):
 
 def collate_fn(batch):
     """
-    Collate function for DataLoader to handle variable-length sequences.
-    
-    Args:
-        batch: List of (words, tags) tensors
-        
-    Returns:
-        tuple: (padded_words, padded_tags, masks)
+    Collate function for BiLSTM DataLoader.
     """
     words_batch = [item[0] for item in batch]
     tags_batch = [item[1] for item in batch]
-    
-    # Pad sequences
+
     words_padded = pad_sequence(words_batch, batch_first=True, padding_value=0)
     tags_padded = pad_sequence(tags_batch, batch_first=True, padding_value=0)
-    
-    # Create masks (1 for real tokens, 0 for padding)
+
     masks = (words_padded != 0).byte()
-    
+
     return words_padded, tags_padded, masks
 
 
@@ -186,15 +178,13 @@ def prepare_datasets(dataset, label_list):
     Returns:
         tuple: (train_data, val_data, test_data, word2idx, tag2idx, idx2tag)
     """
+    
     # Build vocabulary
     word2idx = build_vocab(dataset['train'])
     
     # Create tag mappings
     tag2idx = {tag: i for i, tag in enumerate(label_list)}
     idx2tag = {i: tag for tag, i in tag2idx.items()}
-    
-    print(f"Number of tags: {len(tag2idx)}")
-    print(f"Tag mapping: {tag2idx}")
     
     # Prepare data
     print("\nConverting data to indices...")
@@ -207,3 +197,52 @@ def prepare_datasets(dataset, label_list):
     print(f"Prepared {len(test_data)} test sequences")
     
     return train_data, val_data, test_data, word2idx, tag2idx, idx2tag
+
+
+# ============================================================================
+# BERT Data Preparation
+# ============================================================================
+
+def tokenize_and_align_labels(examples, tokenizer, label_all_tokens=True):
+    """
+    Tokenize and align labels for BERT.
+    
+    Args:
+        examples: Dataset examples
+        tokenizer: BERT tokenizer
+        label_all_tokens: Whether to label all tokens or just the first one
+        
+    Returns:
+        tokenized_inputs: Tokenized inputs with labels
+    """
+    tokenized_inputs = tokenizer(
+        examples['tokens'],
+        truncation=True,
+        is_split_into_words=True,
+        padding='max_length',
+        max_length=128
+    )
+
+    labels = []
+    for i, label in enumerate(examples['ner_tags']):
+        word_ids = tokenized_inputs.word_ids(batch_index=i)
+        previous_word_idx = None
+        label_ids = []
+        for word_idx in word_ids:
+            # Special tokens have a word id that is None. We set the label to -100 so they are automatically
+            # ignored in the loss function.
+            if word_idx is None:
+                label_ids.append(-100)
+            # We set the label for the first token of each word.
+            elif word_idx != previous_word_idx:
+                label_ids.append(label[word_idx])
+            # For the other tokens in a word, we set the label to either the current label or -100, depending on
+            # the label_all_tokens flag.
+            else:
+                label_ids.append(label[word_idx] if label_all_tokens else -100)
+            previous_word_idx = word_idx
+
+        labels.append(label_ids)
+
+    tokenized_inputs["labels"] = labels
+    return tokenized_inputs
