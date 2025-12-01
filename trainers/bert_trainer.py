@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import json
 from transformers import TrainingArguments, Trainer, DataCollatorForTokenClassification
 from utils.metrics import compute_bert_metrics
 from utils.visualization import plot_training_history
@@ -80,7 +81,7 @@ class BERTTrainer:
                     epoch_losses[epoch] = []
                 epoch_losses[epoch].append(log['loss'])
         
-        avg_train_loss = [np.mean(epoch_losses[e]) for e in sorted(epoch_losses.keys())]
+        avg_train_loss = [float(np.mean(epoch_losses[e])) for e in sorted(epoch_losses.keys())]
         
         # Re-structure history for the plotter
         clean_history = {
@@ -90,6 +91,42 @@ class BERTTrainer:
         
         plot_path = os.path.join(self.config.output_dir, "bert_training_history.png")
         plot_training_history(clean_history, save_path=plot_path)
+        
+        # Save history to JSON
+        history_path = os.path.join(self.config.output_dir, "bert_history.json")
+        with open(history_path, 'w') as f:
+            json.dump(clean_history, f, indent=2)
+            
+        # Generate predictions for confusion matrix
+        print("Generating predictions for confusion matrix...")
+        predictions_output = trainer.predict(self.eval_dataset)
+        predictions = np.argmax(predictions_output.predictions, axis=2)
+        labels = predictions_output.label_ids
+        
+        # Convert to list of lists of labels (strings)
+        y_pred = []
+        y_true = []
+        
+        id2label = self.model_wrapper.id2label
+        
+        for i in range(len(predictions)):
+            pred_seq = []
+            true_seq = []
+            for j in range(len(predictions[i])):
+                label_id = labels[i][j]
+                if label_id != -100:  # Ignore special tokens
+                    pred_seq.append(id2label[predictions[i][j]])
+                    true_seq.append(id2label[label_id])
+            y_pred.append(pred_seq)
+            y_true.append(true_seq)
+            
+        predictions_data = {
+            'y_true': y_true,
+            'y_pred': y_pred
+        }
+        predictions_path = os.path.join(self.config.output_dir, "bert_predictions.json")
+        with open(predictions_path, 'w') as f:
+            json.dump(predictions_data, f, indent=2)
         
     def evaluate(self):
         # Evaluation logic if needed separately, but Trainer handles it

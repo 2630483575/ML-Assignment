@@ -15,14 +15,31 @@ env/
 # IDEs
 .vscode/
 .idea/
+.DS_Store
 
-# Project Outputs
+# Project Outputs and Artifacts
 outputs/
+my_analysis/
+my_plots/
 logs/
+wandb/
+
+# Hugging Face
 bert_checkpoints/
+roberta_checkpoints/
 bert_ner_output/
 
-# Models and Plots (if generated in root)
+# Models and Data
 *.joblib
 *.pt
+*.pth
+*.bin
+*.json
 *.png
+*.html
+*.md
+
+# Keep specific documentation files
+!README.md
+!Experiment_Report.md
+!docs/*.md

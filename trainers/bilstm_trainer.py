@@ -2,6 +2,7 @@
 Trainer for BiLSTM-CRF model.
 """
 import os
+import json
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
@@ -92,6 +93,31 @@ class BiLSTMTrainer:
                     
         return evaluate_model(all_trues, all_preds)
 
+    def get_predictions(self, dataloader):
+        """Get predictions for a dataloader."""
+        self.model.eval()
+        all_preds = []
+        all_trues = []
+        
+        with torch.no_grad():
+            for words_batch, tags_batch, masks_batch in dataloader:
+                words_batch = words_batch.to(self.device)
+                masks_batch = masks_batch.to(self.device)
+                
+                batch_preds = self.model(words_batch, masks_batch)
+                
+                for i, pred_path in enumerate(batch_preds):
+                    valid_len = sum(masks_batch[i]).item()
+                    true_tags = tags_batch[i][:valid_len].tolist()
+                    
+                    pred_label = [self.idx2tag[p] for p in pred_path]
+                    true_label = [self.idx2tag[t] for t in true_tags]
+                    
+                    all_preds.append(pred_label)
+                    all_trues.append(true_label)
+                    
+        return all_preds, all_trues
+
     def train(self, dataset):
         """
         Full training loop.
@@ -157,6 +183,11 @@ class BiLSTMTrainer:
         plot_path = os.path.join(self.config.output_dir, "bilstm_training_history.png")
         plot_training_history(history, save_path=plot_path)
         
+        # Save history to JSON
+        history_path = os.path.join(self.config.output_dir, "bilstm_history.json")
+        with open(history_path, 'w') as f:
+            json.dump(history, f, indent=2)
+        
         # Final evaluation on test set
         print("\nEvaluating on test set with best model...")
         self.model.load_state_dict(torch.load(os.path.join(self.config.output_dir, "best_bilstm_crf.pt")))
@@ -172,3 +203,13 @@ class BiLSTMTrainer:
         print(f"Test F1 Score: {test_metrics['f1']:.4f}")
         print("\nDetailed Report:")
         print(test_metrics['report'])
+        
+        # Save predictions for confusion matrix
+        preds, trues = self.get_predictions(test_loader)
+        predictions_data = {
+            'y_true': trues,
+            'y_pred': preds
+        }
+        predictions_path = os.path.join(self.config.output_dir, "bilstm_predictions.json")
+        with open(predictions_path, 'w') as f:
+            json.dump(predictions_data, f, indent=2)

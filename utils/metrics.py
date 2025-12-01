@@ -77,3 +77,18 @@ def compute_bert_metrics(eval_pred, id2label):
     # Remove report for trainer metrics to avoid clutter, or keep it if needed
     # For HF Trainer, we usually want scalar values
     return {k: v for k, v in results.items() if k != 'report'}
+
+
+def compute_metrics_transformers(eval_pred, id2label):
+    """
+    Compute metrics for Transformer models (BERT, RoBERTa, etc.).
+    Alias for compute_bert_metrics to be more generic.
+    
+    Args:
+        eval_pred: Tuple of (predictions, labels)
+        id2label: Mapping from index to label
+        
+    Returns:
+        dict: Metrics dictionary
+    """
+    return compute_bert_metrics(eval_pred, id2label)

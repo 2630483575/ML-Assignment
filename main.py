@@ -25,8 +25,8 @@ def main():
     parser = argparse.ArgumentParser(description="NER Project for CoNLL-2003")
     
     # Mode selection
-    parser.add_argument("--model", type=str, default="crf", choices=["crf", "bilstm", "bert"], help="Model type")
-    parser.add_argument("--mode", type=str, default="train", choices=["train", "evaluate", "cv", "visualize"], help="Operation mode")
+    parser.add_argument("--model", type=str, default="crf", choices=["crf", "bilstm", "bert", "roberta"], help="Model type")
+    parser.add_argument("--mode", type=str, default="train", choices=["train", "evaluate", "cv", "visualize", "analyze", "grid_search"], help="Operation mode")
     parser.add_argument("--output_dir", type=str, default="outputs", help="Output directory")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     
@@ -114,6 +114,52 @@ def main():
         print(f"\nDone! Plots saved to {config.output_dir}")
         return
 
+    # Analysis mode - Dimensionality Reduction and Clustering
+    if config.mode == "analyze":
+        print("Running dimensionality reduction and clustering analysis...")
+        
+        import subprocess
+        import sys
+        
+        # Create analysis output directory
+        analysis_dir = os.path.join(config.output_dir, "analysis")
+        os.makedirs(analysis_dir, exist_ok=True)
+        
+        # Run the analysis script
+        script_path = os.path.join(os.path.dirname(__file__), "scripts", "analyze_embeddings.py")
+        
+        # Determine which models to analyze
+        # CRF doesn't have embeddings, so skip it
+        if args.model == "crf":
+            print("Note: CRF model doesn't have embeddings. Analyzing BiLSTM and BERT instead.")
+            models_to_analyze = ["bilstm", "bert"]
+        else:
+            models_to_analyze = [args.model]
+        
+        # Run analysis for each model
+        for model_name in models_to_analyze:
+            print(f"\n{'='*60}")
+            print(f"Analyzing {model_name.upper()} embeddings...")
+            print(f"{'='*60}")
+            
+            cmd = [
+                sys.executable, script_path,
+                "--output_dir", config.output_dir,
+                "--analysis_dir", analysis_dir,
+                "--model", model_name
+            ]
+            
+            print(f"Running: {' '.join(cmd)}")
+            result = subprocess.run(cmd, capture_output=False, text=True)
+            
+            if result.returncode != 0:
+                print(f"Warning: {model_name} analysis encountered an error (return code: {result.returncode})")
+        
+        print(f"\n{'='*60}")
+        print(f"All analyses complete! Results saved to {analysis_dir}")
+        print(f"{'='*60}")
+        return
+
     # Training/Evaluation Logic
     if config.model_type == "crf":
         trainer = CRFTrainer(config, label_list)
@@ -148,6 +194,33 @@ def main():
         tokenized_datasets = dataset.map(tokenize_function, batched=True)
         
         trainer = BERTTrainer(
+            config, 
+            model_wrapper, 
+            train_dataset=tokenized_datasets['train'], 
+            eval_dataset=tokenized_datasets['validation']
+        )
+        
+        if config.mode == "train":
+            trainer.train()
+        elif config.mode == "evaluate":
+            trainer.evaluate()
+    
+    elif config.model_type == "roberta":
+        # Initialize RoBERTa model wrapper
+        from models.roberta_model import RoBERTaModel
+        from trainers.roberta_trainer import RoBERTaTrainer
+        
+        model_wrapper = RoBERTaModel(config, len(label_list), id2label, label2id)
+        
+        # Prepare data for RoBERTa
+        from data.preprocessing import tokenize_and_align_labels
+        
+        def tokenize_function(examples):
+            return tokenize_and_align_labels(examples, model_wrapper.tokenizer)
+            
+        tokenized_datasets = dataset.map(tokenize_function, batched=True)
+        
+        trainer = RoBERTaTrainer(
             config, 
             model_wrapper, 
             train_dataset=tokenized_datasets['train'], 

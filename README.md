@@ -1,78 +1,157 @@
-# NER Project Refactoring
+# NER Project
 
-This project implements Named Entity Recognition (NER) using the CoNLL-2003 dataset. It provides a modular Python structure for training and evaluating CRF, BiLSTM-CRF, and BERT-based models.
+Modular Named Entity Recognition (NER) pipeline for the CoNLL-2003 benchmark. The codebase trains and evaluates CRF, BiLSTM-CRF, BERT, and RoBERTa models, runs ablation studies, generates visual reports, and performs dimensionality-reduction diagnostics.
 
 ## Project Structure
 
 ```
 ML-Assignment/
-├── data/               # Data loading and preprocessing
-├── models/             # Model implementations (CRF, BiLSTM-CRF, BERT)
-├── utils/              # Metrics and visualization
-├── config/             # Configuration management
-├── trainers/           # Training logic (CRF, BiLSTM, BERT)
-├── main.py             # Main entry point
-├── requirements.txt    # Dependencies
-└── outputs/            # Saved models and visualizations
+├── config/
+│   └── config.py           # Configuration classes (ProjectConfig, ModelConfig)
+├── data/
+│   ├── dataset.py          # CoNLL-2003 loader
+│   ├── preprocessing.py    # Feature extraction & tokenization
+│   └── data_analysis.py    # EDA & statistics
+├── models/
+│   ├── crf_model.py        # sklearn-crfsuite wrapper
+│   ├── bilstm_crf.py       # PyTorch BiLSTM-CRF
+│   ├── bert_model.py       # Hugging Face BERT wrapper
+│   └── roberta_model.py    # Hugging Face RoBERTa wrapper
+├── trainers/
+│   ├── crf_trainer.py      # CRF training logic
+│   ├── bilstm_trainer.py   # BiLSTM training loop
+│   ├── bert_trainer.py     # BERT fine-tuning (HF Trainer)
+│   └── roberta_trainer.py  # RoBERTa fine-tuning
+├── scripts/
+│   ├── run_data_analysis.py      # Generate EDA report
+│   ├── generate_visualizations.py # Create plots from results
+│   ├── run_cross_validation.py   # K-Fold CV
+│   ├── compare_features.py       # Feature ablation
+│   └── analyze_embeddings.py     # PCA/t-SNE analysis
+├── utils/
+│   ├── metrics.py          # Seqeval metrics (F1, Precision, Recall)
+│   └── visualization.py    # Plotting utilities
+├── outputs/                # Artifacts (models, logs, plots)
+├── main.py                 # CLI Entry point
+├── requirements.txt        # Dependencies
+└── README.md               # Documentation
 ```
 
-## Quick Start
+## Environment Setup
 
-### Installation
-```bash
-pip install -r requirements.txt
+1. **Python version**: 3.9–3.11 works (project tested on 3.10).
+2. **Create a virtual environment (PowerShell)**
+	```powershell
+	python -m venv .venv
+	.\.venv\Scripts\Activate.ps1
+	```
+3. **Install dependencies**
+	```powershell
+	pip install -r requirements.txt
+	```
+4. **Verify optional dimensionality-reduction stack**
+	```powershell
+	python scripts/verify_setup.py
+	```
+	The script checks `numpy`, `matplotlib`, `scikit-learn`, and optional `umap`. Install any missing package and rerun.
+
+All runtime settings (batch size, epochs, learning rates, etc.) can be edited through CLI flags or directly inside `config/config.py`.
+
+## Dataset Preparation
+
+| Step | Instruction |
+|------|-------------|
+| Source | CoNLL-2003 (English) on Hugging Face Datasets: https://huggingface.co/datasets/conll2003 (mirrors the original https://www.clips.uantwerpen.be/conll2003/ner/ release). |
+| Download | Run once to cache every split locally:<br>`python -c "from datasets import load_dataset; load_dataset('conll2003', revision='refs/convert/parquet')"` |
+| Default location | Hugging Face stores the parquet shards under `%USERPROFILE%\.cache\huggingface\datasets\conll2003\`. Leave them there; `data/dataset.py` loads from this cache automatically. |
+| Optional project-local copy | If you must keep raw `.txt` files inside the repo, mirror the structure below (these files are not required unless you customize `load_conll2003()`):<br>
+```
+ML-Assignment/
+└── data/
+	 └── raw/
+		  └── conll2003/
+				├── train.txt
+				├── valid.txt
+				└── test.txt
+``` |
+| Preprocess / sanity check | Generate the exploratory report and POS/NER statistics:<br>`python scripts/run_data_analysis.py --output_dir outputs/data_analysis`<br>This produces `outputs/data_analysis/*.png` plus `my_analysis/data_analysis_report.md`. |
+
+> **Note**: No manual preprocessing is needed beyond the command above—the Hugging Face loader yields tokenized sentences and NER tags. Feature extractors in `data/preprocessing.py` operate directly on that format.
+
+## Running the Pipeline
+
+All commands are Windows PowerShell-friendly. Add `--output_dir <path>` to redirect artifacts if needed.
+
+### 1. Health checks & analytics
+
+```powershell
+python scripts/verify_setup.py                              # dependency sanity check
+python scripts/run_data_analysis.py --output_dir my_analysis # Generate data analysis report
 ```
 
-### Train CRF Model
-```bash
+### 2. Train Models (Generates artifacts for visualization)
+
+Run these commands to train models and generate the necessary `.json` files (history and predictions) for the visualization suite.
+
+```powershell
+# 1. CRF Baseline
 python main.py --model crf --mode train
+
+# 2. BiLSTM-CRF
+python main.py --model bilstm --mode train
+
+# 3. BERT Fine-tuning
+python main.py --model bert --mode train
+
+# 4. RoBERTa Fine-tuning
+python main.py --model roberta --mode train
 ```
 
-### Train BiLSTM-CRF Model
-```bash
-python main.py --model bilstm --mode train --epochs 20
+### 3. Generate Visualizations
+
+After training the models, run this script to generate comprehensive plots (Confusion Matrices, Training Curves, Model Comparison).
+
+```powershell
+python scripts/generate_visualizations.py
+```
+The visualizations will be saved in `outputs/visualizations/`.
+
+### 4. Advanced Experiments (Optional)
+
+```powershell
+# Feature Ablation Study (CRF)
+python scripts/compare_features.py --quick
+
+# Cross-Validation
+python scripts/run_cross_validation.py --model crf --n_splits 5
+python scripts/run_cross_validation.py --model bilstm --n_splits 3 --quick
+
+# Dimensionality Reduction Analysis (PCA/t-SNE/UMAP)
+# Visualizes how models cluster different entity types in the embedding space
+python scripts/analyze_embeddings.py --model both --max_samples 1000
 ```
 
-### Train BERT Model
-```bash
-python main.py --model bert --mode train --epochs 3 --batch_size 16
-```
+Each command emits progress to the console and writes artifacts into `outputs/`, including:
 
-### Generate Visualizations
-```bash
-python main.py --mode visualize
-```
+- `best_bilstm_crf.pt`, `best_bert_model/`, `best_roberta_model/`, `crf_model.joblib`
+- `*_results.json`, `*_cv_results.json`, `feature_comparison_results.json`
+- `outputs/visualizations/*.png` (confusion matrices, per-label performance, training curves)
+- `outputs/analysis/*.png` (PCA/t-SNE/UMAP + clustering)
+- `my_plots/index.html` gallery for quick inspection
 
-### Cross-Validation (CRF)
-```bash
-python main.py --model crf --mode cv
-```
+## Configuration Reference
 
-## Configuration
+- **Global**: `--seed`, `--output_dir`
+- **CRF**: `--c1`, `--c2`, `--max_iter`
+- **BiLSTM**: `--epochs`, `--batch_size`, `--lr`, `--hidden_dim`
+- **BERT/RoBERTa**: share the `--epochs`, `--batch_size`, `--lr` flags (defaults overridden to 2e-5 for BERT/RoBERTa inside `main.py` if you keep `0.001`). Extra knobs—model name, warmup, weight decay—live under `config/config.py`.
 
-### CRF Parameters
-- `--c1`, `--c2`: L1/L2 regularization parameters (default: 0.1)
-- `--max_iter`: Maximum optimization iterations (default: 100)
+Adjusting these flags plus the scripts above covers every experiment reproduced in `Experiment_Report.md`.
 
-### BiLSTM-CRF / BERT Parameters
-- `--epochs`: Number of training epochs (default: 20 for BiLSTM, 3 for BERT)
-- `--batch_size`: Batch size (default: 32 for BiLSTM, 16 for BERT)
-- `--lr`: Learning rate (default: 0.001 for BiLSTM, 2e-5 for BERT)
-- `--hidden_dim`: LSTM hidden dimension (default: 256)
+## Troubleshooting
 
-### Advanced BERT Parameters
-Defined in `config/config.py`:
-- `model_name`: Pre-trained model (default: "bert-base-cased")
-- `weight_decay`: 0.01
-- `warmup_steps`: 500
+- **Datasets download errors**: ensure `pip install datasets` succeeded. Behind a proxy, set `HF_ENDPOINT` or download manually from the URLs listed above and keep the tarball under `%USERPROFILE%\.cache\huggingface\datasets`.
+- **CUDA Out Of Memory**: lower `--batch_size` for BERT/RoBERTa or enable gradient accumulation inside `config/bert`.
+- **Missing UMAP**: install via `pip install umap-learn` or skip UMAP plots (script handles the absence gracefully).
 
-### General Parameters
-- `--seed`: Random seed for reproducibility (default: 42)
-- `--output_dir`: Output directory (default: "outputs")
-
-## Outputs
-Models and plots are saved in the `outputs/` directory:
-- `crf_model.joblib`: Trained CRF model
-- `best_bilstm_crf.pt`: Trained BiLSTM-CRF model
-- `best_bert_model/`: Trained BERT model and tokenizer
-- `*.png`: Visualization plots
+For additional rubric-specific details (cross-validation, feature engineering, dimensionality reduction), see the documents under `docs/` and the full `Experiment_Report.md`.

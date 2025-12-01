@@ -200,3 +200,51 @@ def plot_cv_results(cv_scores, save_path=None):
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
         print(f"CV results plot saved to {save_path}")
+
+
+def plot_confusion_matrix(y_true, y_pred, labels=None, save_path=None, title="Confusion Matrix"):
+    """
+    Plot confusion matrix.
+    
+    Args:
+        y_true (list): List of true labels (flattened)
+        y_pred (list): List of predicted labels (flattened)
+        labels (list, optional): List of label names to include
+        save_path (str, optional): Path to save the plot
+        title (str): Plot title
+    """
+    from sklearn.metrics import confusion_matrix
+    
+    # Flatten lists if they are lists of lists
+    if isinstance(y_true[0], list):
+        y_true = [item for sublist in y_true for item in sublist]
+        y_pred = [item for sublist in y_pred for item in sublist]
+    
+    # Get unique labels if not provided
+    if labels is None:
+        labels = sorted(list(set(y_true) | set(y_pred)))
+        # Move 'O' to the end if present for better visualization of entities
+        if 'O' in labels:
+            labels.remove('O')
+            labels.append('O')
+            
+    cm = confusion_matrix(y_true, y_pred, labels=labels)
+    
+    # Normalize
+    cm_norm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+    cm_norm = np.nan_to_num(cm_norm)
+    
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(cm_norm, annot=True, fmt='.2f', cmap='Blues',
+                xticklabels=labels, yticklabels=labels)
+    
+    plt.title(title, fontsize=15)
+    plt.ylabel('True Label')
+    plt.xlabel('Predicted Label')
+    plt.tight_layout()
+    
+    if save_path:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"Confusion matrix saved to {save_path}")
+    plt.close()
