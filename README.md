@@ -153,5 +153,3 @@ Adjusting these flags plus the scripts above covers every experiment reproduced 
 - **Datasets download errors**: ensure `pip install datasets` succeeded. Behind a proxy, set `HF_ENDPOINT` or download manually from the URLs listed above and keep the tarball under `%USERPROFILE%\.cache\huggingface\datasets`.
 - **CUDA Out Of Memory**: lower `--batch_size` for BERT/RoBERTa or enable gradient accumulation inside `config/bert`.
 - **Missing UMAP**: install via `pip install umap-learn` or skip UMAP plots (script handles the absence gracefully).
-
-For additional rubric-specific details (cross-validation, feature engineering, dimensionality reduction), see the documents under `docs/` and the full `Experiment_Report.md`.
